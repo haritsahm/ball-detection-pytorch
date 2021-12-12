@@ -1,15 +1,122 @@
 import os
-
+import albumentations as A
+import json
 import pytest
+import tempfile
 import torch
 
+from albumentations.pytorch import ToTensorV2
 from src.datamodules.datasets.fcnn_dataset import FCNNDataset
+from torch.utils.data import Dataset
+from torchvision import transforms, utils
 
-img_dir = "/media/haritsahm/DataStorage/TORSO_21_dataset/torso_21_detection_dataset/data"
-annotation_file = "/media/haritsahm/DataStorage/TORSO_21_dataset/torso_21_detection_dataset/train.json"
+img_dir = "/mnt/c/Users/root/Documents/TORSO_21_dataset/example_images"
 
+def annotation_sample():
+    return {
+        "info": {
+            "description": "COCO 2017 Dataset",
+            "url": "http://cocodataset.org",
+            "version": "1.0",
+            "year": 2017,
+            "contributor": "COCO Consortium",
+            "date_created": "2017/09/01"
+        },
+        "images": [
+        {
+            "file_name": "img_fake_cam_000059.png",
+            "height": 480,
+            "width": 640,
+            "id": 1
+        }],
+        "categories": [
+            {"id": 0,"name": "obstacle","supercategory": None},
+            {"id": 1,"name": "robot","supercategory": None},
+            {"id": 2,"name": "ball","supercategory": None}
+        ],
+        "annotations": [
+            {"id": 1,"image_id": 1,"category_id": 0,"bbox": [0.0,2.0,369.00000000000006,478.0],"area": 176382.00000000003,"blurred": False,"concealed": False},
+            {"id": 2,"image_id": 3,"category_id": 0,"bbox": [159.0,0.0,227.0,478.0],"area": 108506.0,"blurred": False,"concealed": False},
+            {"id": 3,"image_id": 3,"category_id": 0,"bbox": [385.0,0.0,225.0,334.0],"area": 75150.0,"blurred": False,"concealed": False}
+        ]
+    }
 
-def fcnn_dataset():
-    dataset = FCNNDataset(annotations_file=annotations_file, img_dir=img_dir, transform=None)
+class TestFCNNDataset(object):
 
-    assert dataset == True
+    # TODO: Test with valid and no augmentations
+    def test_fcnn_dataset(self):
+        annotation = annotation_sample()
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, 'w') as tmp:
+            # do stuff with temp file
+            json.dump(annotation, tmp)
+
+        img_dir = "/mnt/c/Users/root/Documents/TORSO_21_dataset/example_images"
+        
+        dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=None)
+
+        # Object type
+        assert isinstance(dataset, torch.utils.data.Dataset)
+
+        # Dataset len
+        assert len(dataset) == 1
+
+        # Dataloader
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+
+        image, mask, bbox, centers, imginfo = next(iter(dataloader))
+
+        assert image.shape[0] == 1
+        assert isinstance(image, torch.Tensor)
+        assert isinstance(mask, torch.Tensor)
+        assert isinstance(bbox, torch.Tensor)
+        assert isinstance(centers, torch.Tensor)
+        assert isinstance(imginfo, dict)
+
+        os.remove(path)
+
+    def test_augmentation(self):
+        annotation = annotation_sample()
+
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, 'w') as tmp:
+            # do stuff with temp file
+            json.dump(annotation, tmp)
+
+        transform = A.Compose([ToTensorV2()], bbox_params=A.BboxParams(format='albumentations'))
+
+        dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=transform)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+
+        image, mask, bbox, centers, imginfo = next(iter(dataloader))
+
+        assert image.shape[0] == 1
+        assert isinstance(image, torch.Tensor)
+        assert isinstance(mask, torch.Tensor)
+        assert isinstance(bbox, torch.Tensor)
+
+        os.remove(path)
+
+        with pytest.raises(ValueError):
+            transform = transforms.Compose(
+                [
+                    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+                ]
+            )
+            dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=transform)
+
+    def test_zero_bounding_box(self):
+        annotation = annotation_sample()
+        annotation['annotations'] = []
+
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, 'w') as tmp:
+            # do stuff with temp file
+            json.dump(annotation, tmp)
+
+        dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=None)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+
+        _, _, bbox, centers, _ = next(iter(dataloader))
+
+        os.remove(path)
