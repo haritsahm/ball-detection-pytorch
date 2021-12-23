@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class FCNN_v1(nn.Module):
-  def __init__(self):
-    super(FCNN_v1, self).__init__()
+class FCNNv1(nn.Module):
+  def __init__(self, hparams: dict):
+    super(FCNNv1, self).__init__()
     # Input size [3, 150, 200]
-    
+
     self.conv1_1 = nn.Conv2d(3, 16, kernel_size=7, stride=2, padding=2)
     self.conv1_2 = nn.Conv2d(3, 16, kernel_size=9, stride=2, padding=3)
     self.conv2 = nn.Conv2d(32, 32, kernel_size=5, stride=2, padding=(3,2))
@@ -20,9 +20,13 @@ class FCNN_v1(nn.Module):
     self.drop_out = nn.Dropout2d(p=0.5)
 
     for m in self.modules():
-        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+        if isinstance(m, nn.Conv2d):
             torch.nn.init.xavier_normal_(m.weight)
-
+            torch.nn.init.constant_(m.bias, 0.01)
+        elif isinstance(m, nn.Linear):
+            torch.nn.init.xavier_normal_(m.weight)
+            torch.nn.init.zeros_(m.bias)
+            
   def forward(self, x):
     out_1 = self.drop_out(F.leaky_relu(self.conv1_1(x))) 
     out_2 = self.drop_out(F.leaky_relu(self.conv1_2(x)))
@@ -38,57 +42,58 @@ class FCNN_v1(nn.Module):
 
     return out_x, out_y
 
-  class FCNN_v2(nn.Module):
-  def __init__(self, input_size = (150,200)):
-    super(FCNN_v2, self).__init__()
-    # Input size [3, 150, 200]
-    self._input_size = np.asarray(input_size) if len(input_size) == 2 else np.asarray(input_size[1:])
+  class FCNNv2(nn.Module):
+    def __init__(self, hparams: dict):
+      super(FCNNv2, self).__init__()
+      # Input size [3, 150, 200]
+      input_size = hparams["input_size"]
+      self._input_size = np.asarray(input_size) if len(input_size) == 2 else np.asarray(input_size[1:])
 
-    ## Encoding
-    self.e_conv1 = nn.Conv2d(3, 16, kernel_size=3, padding="same")
-    self.e_bn1 = nn.BatchNorm2d(16)
+      ## Encoding
+      self.e_conv1 = nn.Conv2d(3, 16, kernel_size=3, padding="same")
+      self.e_bn1 = nn.BatchNorm2d(16)
 
-    self.e_conv2 = nn.Conv2d(16, 32, kernel_size=3, padding="same")
-    self.e_bn2 = nn.BatchNorm2d(32)
+      self.e_conv2 = nn.Conv2d(16, 32, kernel_size=3, padding="same")
+      self.e_bn2 = nn.BatchNorm2d(32)
 
-    self.e_conv3 = nn.Conv2d(32, 32, kernel_size=3, padding="same")
-    self.e_bn3 = nn.BatchNorm2d(32)
+      self.e_conv3 = nn.Conv2d(32, 32, kernel_size=3, padding="same")
+      self.e_bn3 = nn.BatchNorm2d(32)
 
-    self.e_conv4 = nn.Conv2d(48, 64, kernel_size=3, padding="same")
-    self.e_bn4 = nn.BatchNorm2d(64)
+      self.e_conv4 = nn.Conv2d(48, 64, kernel_size=3, padding="same")
+      self.e_bn4 = nn.BatchNorm2d(64)
 
-    self.e_conv5 = nn.Conv2d(64, 64, kernel_size=3, padding="same")
-    self.e_bn5 = nn.BatchNorm2d(64)
+      self.e_conv5 = nn.Conv2d(64, 64, kernel_size=3, padding="same")
+      self.e_bn5 = nn.BatchNorm2d(64)
 
-    self.e_conv6 = nn.Conv2d(112, 128, kernel_size=3, padding="same")
-    self.e_bn6 = nn.BatchNorm2d(128)
+      self.e_conv6 = nn.Conv2d(112, 128, kernel_size=3, padding="same")
+      self.e_bn6 = nn.BatchNorm2d(128)
 
-    self.e_conv7 = nn.Conv2d(128, 128, kernel_size=3, padding="same")
-    self.e_bn7 = nn.BatchNorm2d(128)
+      self.e_conv7 = nn.Conv2d(128, 128, kernel_size=3, padding="same")
+      self.e_bn7 = nn.BatchNorm2d(128)
 
-    ## Decoding
-    self.d_conv1 = nn.Conv2d(176, 64, kernel_size=3, padding="same")
-    self.d_bn1 = nn.BatchNorm2d(64)
+      ## Decoding
+      self.d_conv1 = nn.Conv2d(176, 64, kernel_size=3, padding="same")
+      self.d_bn1 = nn.BatchNorm2d(64)
 
-    self.d_conv2 = nn.Conv2d(64, 32, kernel_size=3, padding="same")
-    self.d_bn2 = nn.BatchNorm2d(32)
+      self.d_conv2 = nn.Conv2d(64, 32, kernel_size=3, padding="same")
+      self.d_bn2 = nn.BatchNorm2d(32)
 
-    self.d_conv3 = nn.Conv2d(32, 32, kernel_size=3, padding="same")
-    self.d_bn3 = nn.BatchNorm2d(32)
+      self.d_conv3 = nn.Conv2d(32, 32, kernel_size=3, padding="same")
+      self.d_bn3 = nn.BatchNorm2d(32)
 
-    self.d_conv4 = nn.Conv2d(48, 16, kernel_size=3, padding="same")
-    self.d_bn4 = nn.BatchNorm2d(16)
+      self.d_conv4 = nn.Conv2d(48, 16, kernel_size=3, padding="same")
+      self.d_bn4 = nn.BatchNorm2d(16)
 
-    self.d_conv5 = nn.Conv2d(16, 16, kernel_size=3, padding="same")
-    self.d_bn5 = nn.BatchNorm2d(16)
+      self.d_conv5 = nn.Conv2d(16, 16, kernel_size=3, padding="same")
+      self.d_bn5 = nn.BatchNorm2d(16)
 
-    self.d_conv6 = nn.Conv2d(16, 1, kernel_size=3, padding="same")
+      self.d_conv6 = nn.Conv2d(16, 1, kernel_size=3, padding="same")
 
-    self.drop_out = nn.Dropout2d(p=0.5)
+      self.drop_out = nn.Dropout2d(p=0.5)
 
-    for m in self.modules():
-        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-            torch.nn.init.xavier_normal_(m.weight)
+      for m in self.modules():
+          if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+              torch.nn.init.xavier_normal_(m.weight)
 
   def forward(self, x):
     out = self.drop_out(F.leaky_relu(self.e_bn1(self.e_conv1(x))))

@@ -46,8 +46,7 @@ class FCNNDataset(Dataset):
             # bboxes
             if ann['category_id'] == 1: # ball only
                 x, y, w, h = ann['bbox'] # x, y, w ,h 
-                x1, y1, x2, y2 = x/im_w, y/im_h, (x+w)/im_w, (y+h)/im_h # normalized
-                bboxes.append([x1,y1,x2,y2,"ball"])
+                bboxes.append([x,y,w,h,"ball"])
 
                 # semantic mask
                 cx, cy = int(x+w/2), int(y+h/2)
@@ -61,14 +60,17 @@ class FCNNDataset(Dataset):
             bboxes = transformed['bboxes']
             mask = transformed['mask']
             
+        tim_h, tim_w, _ = image.shape
         # Get bbox centers
-        box_centers = []
-        for box in bboxes:
-            cx, cy = box[0] + (box[2]-box[0])/2, box[1] + (box[3]+box[1])/2
-            box_centers.append([cx, cy])
+        center_x = torch.zeros(tim_w) # [tim_w]
+        center_y = torch.zeros(tim_h) # [tim_h]
+        if len(bboxes) == 1:
+            for box in bboxes:
+                cx, cy = int(box[0] + box[2]/2), int(box[1] + box[3]/2)
+                center_x[cx] = 1
+                center_y[cy] = 1
 
         # To tensors
-        box_centers = torch.as_tensor(box_centers)
-        bboxes = torch.as_tensor(bboxes)
+        bboxes = torch.as_tensor(bboxes) # [N, 4]
 
-        return image, mask, bboxes, box_centers, imgInfo
+        return image, mask, bboxes, center_x, center_y, imgInfo
