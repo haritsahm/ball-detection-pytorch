@@ -6,8 +6,10 @@ import torch
 from src.datamodules.fcnn_datamodule import FCNNDataModule
 
 
-def test_fcnn_datamodule(batch_size):
-    datamodule = FCNNDataModule(batch_size=batch_size)
+@pytest.mark.parametrize("batch_size", [16, 32, 64])
+@pytest.mark.parametrize("data_dir", ["/media/haritsahm/DataStorage/TORSO_21_dataset/torso_21_detection_dataset"])
+def test_fcnn_datamodule(batch_size, data_dir):
+    datamodule = FCNNDataModule(batch_size=batch_size, data_dir=data_dir)
 
     assert not datamodule.data_train and not datamodule.data_val and not datamodule.data_test
 
@@ -23,9 +25,8 @@ def test_fcnn_datamodule(batch_size):
     assert datamodule.test_dataloader()
 
     batch = next(iter(datamodule.train_dataloader()))
-    image, mask, bbox, centers, imginfo = batch
+    image, mask, bbox, center_x, center_y, imginfo = batch
 
-    assert len(x) == batch_size
-    assert len(y) == batch_size
-    assert x.dtype == torch.float32
-    assert y.dtype == torch.int64
+    assert len(image) == batch_size
+    assert len(mask) == batch_size
+    assert center_x[0].dtype == torch.float32

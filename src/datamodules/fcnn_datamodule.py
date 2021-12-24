@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 
-import albumentation as A
+import os
+import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import torch
 from pytorch_lightning import LightningDataModule
@@ -38,14 +39,14 @@ class FCNNDataModule(LightningDataModule):
                 A.RGBShift(r_shift_limit=15, g_shift_limit=15, b_shift_limit=15, p=0.5),
                 A.RandomBrightnessContrast(p=0.2),
                 ToTensorV2(),
-            ], bbox_params=A.BboxParams(format='albumentations'))
+            ], bbox_params=A.BboxParams(format='coco'))
 
         self.test_transforms = A.load(test_transform, data_format='yaml') if test_transform else \
             A.Compose([
                 A.SmallestMaxSize(max_size=image_size[1] + 60),
                 A.CenterCrop(width=image_size[1], height=image_size[0]),
                 ToTensorV2(),
-            ], bbox_params=A.BboxParams(format='albumentations'))
+            ], bbox_params=A.BboxParams(format='coco'))
 
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
@@ -78,6 +79,7 @@ class FCNNDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
+            collate_fn=self.data_train.collate_fn
         )
 
     def val_dataloader(self):
@@ -87,6 +89,7 @@ class FCNNDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            collate_fn=self.data_val.collate_fn
         )
 
     def test_dataloader(self):
@@ -96,4 +99,5 @@ class FCNNDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            collate_fn=self.data_test.collate_fn
         )

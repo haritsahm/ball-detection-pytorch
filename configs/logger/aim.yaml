@@ -1,0 +1,16 @@
+# track experimential data by using Aim
+aim_logger = AimLogger(
+    experiment='aim_on_pt_lightning',
+    train_metric_prefix=
+    val_metric_prefix='val_',
+)
+
+# https://aimstack.io/
+
+aim:
+  _target_: aim.pytorch_lightning.AimLogger
+  repo: "aim/"
+  experiment: ${name}
+  train_metric_prefix: "train_"
+  val_metric_prefix: "val_"
+  test_metric_prefix: "test_"

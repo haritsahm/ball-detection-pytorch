@@ -10,22 +10,17 @@ from src.datamodules.datasets.fcnn_dataset import FCNNDataset
 from torch.utils.data import Dataset
 from torchvision import transforms, utils
 
-img_dir = "/mnt/c/Users/root/Documents/TORSO_21_dataset/example_images"
+img_dir = "/media/haritsahm/DataStorage/TORSO_21_dataset/example_images"
 
 
 def annotation_sample():
     return {
         "info": {
-            "description": "COCO 2017 Dataset",
-            "url": "http://cocodataset.org",
             "version": "1.0",
-            "year": 2017,
-            "contributor": "COCO Consortium",
-            "date_created": "2017/09/01"
         },
         "images": [
             {
-                "file_name": "img_fake_cam_000059.png",
+                "file_name": "img_fake_cam_000059.PNG",
                 "height": 480,
                 "width": 640,
                 "id": 1
@@ -48,15 +43,11 @@ def annotation_sample():
 
 class TestFCNNDataset(object):
 
-    # TODO: Test with valid and no augmentations
     def test_fcnn_dataset(self):
         annotation = annotation_sample()
         fd, path = tempfile.mkstemp()
         with os.fdopen(fd, 'w') as tmp:
-            # do stuff with temp file
             json.dump(annotation, tmp)
-
-        img_dir = "/mnt/c/Users/root/Documents/TORSO_21_dataset/example_images"
 
         dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=None)
 
@@ -69,13 +60,14 @@ class TestFCNNDataset(object):
         # Dataloader
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
-        image, mask, bbox, centers, imginfo = next(iter(dataloader))
+        image, mask, bbox, center_x, center_y, imginfo = next(iter(dataloader))
 
         assert image.shape[0] == 1
         assert isinstance(image, torch.Tensor)
         assert isinstance(mask, torch.Tensor)
         assert isinstance(bbox, torch.Tensor)
-        assert isinstance(centers, torch.Tensor)
+        assert isinstance(center_x, torch.Tensor)
+        assert isinstance(center_y, torch.Tensor)
         assert isinstance(imginfo, dict)
 
         os.remove(path)
@@ -85,15 +77,14 @@ class TestFCNNDataset(object):
 
         fd, path = tempfile.mkstemp()
         with os.fdopen(fd, 'w') as tmp:
-            # do stuff with temp file
             json.dump(annotation, tmp)
 
-        transform = A.Compose([ToTensorV2()], bbox_params=A.BboxParams(format='albumentations'))
+        transform = A.Compose([ToTensorV2()], bbox_params=A.BboxParams(format='coco'))
 
         dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=transform)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
-        image, mask, bbox, centers, imginfo = next(iter(dataloader))
+        image, mask, bbox, center_x, center_y, imginfo = next(iter(dataloader))
 
         assert image.shape[0] == 1
         assert isinstance(image, torch.Tensor)
@@ -122,6 +113,6 @@ class TestFCNNDataset(object):
         dataset = FCNNDataset(annotations_file=path, img_dir=img_dir, transform=None)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
-        _, _, bbox, centers, _ = next(iter(dataloader))
+        _, _, bbox, center_x, center_y, _ = next(iter(dataloader))
 
         os.remove(path)
