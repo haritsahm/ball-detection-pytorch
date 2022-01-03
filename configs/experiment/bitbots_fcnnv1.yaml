@@ -1,0 +1,29 @@
+# @package _global_
+
+defaults:
+  - override /mode: exp.yaml
+  - override /trainer: default.yaml
+  - override /model: fcnn_v1_model.yaml
+  - override /datamodule: fcnn_datamodule.yaml
+  - override /callbacks: none.yaml
+  - override /logger: null
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+# name of the run determines folder name in logs
+# it's also accessed by loggers
+name: "bitbots_fcnnv1"
+
+seed: 12345
+
+trainer:
+  min_epochs: 1
+  max_epochs: 10
+  gradient_clip_val: 0.5
+
+model:
+  lr: 0.002
+
+datamodule:
+  batch_size: 64

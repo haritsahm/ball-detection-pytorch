@@ -1,0 +1,4 @@
+_target_: src.models.bitbots_fcnn_v1.FCNNv1LitModel
+
+lr: 0.001
+weight_decay: 0.0005
