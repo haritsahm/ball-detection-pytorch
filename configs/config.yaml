@@ -4,12 +4,8 @@
 defaults:
   - _self_
   - trainer: default.yaml
-  - model: mnist_model.yaml
-<<<<<<< HEAD
+  - model: fcnn_v1_model.yaml
   - datamodule: fcnn_datamodule.yaml
-=======
-  - datamodule: mnist_datamodule.yaml
->>>>>>> 18d0e212da437ddb1043f4b63a9258f3c51082a8
   - callbacks: default.yaml
   - logger: null # set logger here or use command line (e.g. `python run.py logger=wandb`)
 
