@@ -1,7 +1,11 @@
 defaults:
   - default.yaml
 
+<<<<<<< HEAD
 gpus: 1
+=======
+gpus: 0
+>>>>>>> 18d0e212da437ddb1043f4b63a9258f3c51082a8
 
 min_epochs: 1
 max_epochs: 2

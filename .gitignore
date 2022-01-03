@@ -146,4 +146,7 @@ logs/
 wandb/
 .env
 .autoenv
+<<<<<<< HEAD
 .aim/
+=======
+>>>>>>> 18d0e212da437ddb1043f4b63a9258f3c51082a8

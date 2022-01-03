@@ -1,6 +1,10 @@
 _target_: pytorch_lightning.Trainer
 
+<<<<<<< HEAD
 gpus: 1
+=======
+gpus: 0
+>>>>>>> 18d0e212da437ddb1043f4b63a9258f3c51082a8
 
 min_epochs: 1
 max_epochs: 10
@@ -10,4 +14,8 @@ resume_from_checkpoint: null
 weights_summary: "full"
 
 # number of validation steps to execute at the beginning of the training
+<<<<<<< HEAD
 num_sanity_val_steps: 1
+=======
+num_sanity_val_steps: 0
+>>>>>>> 18d0e212da437ddb1043f4b63a9258f3c51082a8
