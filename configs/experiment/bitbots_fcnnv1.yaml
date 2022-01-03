@@ -1,8 +1,8 @@
 # @package _global_
 
 defaults:
-  - override /mode: debug.yaml
-  - override /trainer: debug.yaml
+  - override /mode: exp.yaml
+  - override /trainer: default.yaml
   - override /model: fcnn_v1_model.yaml
   - override /datamodule: fcnn_datamodule.yaml
   - override /callbacks: none.yaml
@@ -13,7 +13,7 @@ defaults:
 
 # name of the run determines folder name in logs
 # it's also accessed by loggers
-name: "example_simple"
+name: "bitbots_fcnnv1"
 
 seed: 12345
 
