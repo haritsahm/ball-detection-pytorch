@@ -96,6 +96,7 @@ class FCNNv2(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                 torch.nn.init.xavier_normal_(m.weight)
+                torch.nn.init.zeros_(m.bias)
 
     def forward(self, x):
         out = self.drop_out(F.leaky_relu(self.e_bn1(self.e_conv1(x))))
