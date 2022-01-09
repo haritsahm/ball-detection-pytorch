@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric
-from src.models.modules.metrics import RadiusAccuracy
+from src.models.modules.metrics import RadiusAccuracy, IoUPercentile
 from src.models.modules.postprocessors import fcnnv2_post_processs
 from src.models.modules.bitbots_fcnn import FCNNv2
 
@@ -29,12 +29,13 @@ class FCNNv2LitModel(LightningModule):
             raise ValueError("Model is not nn.Module")
 
         # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
 
         # use separate metric instance for train, val and test step
         # to ensure a proper reduction over the epoch
         self.train_radacc = [RadiusAccuracy(n) for n in [3, 5, 10]]
         self.val_radacc = [RadiusAccuracy(n) for n in [3, 5, 10]]
+        self.val_iou = IoUPercentile()
         self.test_radacc = [RadiusAccuracy(n) for n in [3, 5, 10]]
 
         # for logging best so far validation accuracy
@@ -44,72 +45,73 @@ class FCNNv2LitModel(LightningModule):
         return self.model(x)
 
     def step(self, batch: Any):
-        image, _, _, gtcenter_x, gtcenter_y, imgInfo = batch
-        logits = self.forward(image)
-        output = F.sigmoid(logits, dim=1).cpu().detach().numpy()
-        candidates = fcnnv2_post_processs(output)
-        candidates = torch.from_numpy(candidates)
+        images, masks, _, gtcenter_x, gtcenter_y, imgInfo = batch
+        logits = self.forward(images)
         arg_gt_x = torch.argmax(gtcenter_x, dim=1)  # (N, 1)
         arg_gt_y = torch.argmax(gtcenter_y, dim=1)  # (N, 1)
 
-        loss = self.criterion(candidates[:, 0], arg_gt_x) + self.criterion(candidates[:, 1], arg_gt_y)
+        loss = self.criterion(logits.squeeze(dim=1), masks)
         
-        # TODO: Compute the prediction output for highest candidate
-        preds = torch.max(torch.min(logits, 1.0, dim=1), 0.0, dim=1)
+        preds = torch.clamp(logits, min=0, max=1)
 
-        return loss, preds, arg_gt_x, arg_gt_y, imgInfo
+        return loss, preds, masks, arg_gt_x, arg_gt_y, imgInfo
 
     def training_step(self, batch: Any, batch_idx: int):
-        loss, preds, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+        loss, preds, masks, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
 
-        arg_pred_x = torch.argmax(preds[0], dim=1)  # (N, 1)
-        arg_pred_y = torch.argmax(preds[1], dim=1)  # (N, 1)
+        output = preds.squeeze().detach().cpu().numpy()
+        candidates = fcnnv2_post_processs(output)
+        candidates = torch.from_numpy(candidates) # (N, 3)
 
-        # TODO: Compute metrics
-        # - Jaccard Index (IoU) 90/99
-        # - TP/FP/FN, intersection > 50% with highest candidate
-        # - Radius Accuracy
-
-        # log train metrics
-        acc = [func(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.train_radacc]
+        [func.update(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.train_radacc]
 
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
+
+        return {"loss": loss, "preds": preds, "target_x": gtcenter_x, "target_y": gtcenter_y}
+
+    def training_epoch_end(self, outputs: List[Any]):
+        acc = [func.compute() for func in self.train_radacc]  # get val accuracy from current epoch
         self.log("train/acc_3", acc[0], on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/acc_5", acc[1], on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/acc_10", acc[2], on_step=False, on_epoch=True, prog_bar=True)
 
-        # we can return here dict with any tensors
-        # and then read it in some callback or in `training_epoch_end()`` below
-        # remember to always return loss from `training_step()` or else backpropagation will fail!
-        return {"loss": loss, "preds": preds, "target_x": gtcenter_x, "target_y": gtcenter_y}
-
-    def training_epoch_end(self, outputs: List[Any]):
-        # `outputs` is a list of dicts returned from `training_step()`
-        pass
-
     def validation_step(self, batch: Any, batch_idx: int):
-        loss, preds, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+        loss, preds, masks, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+
+        # TODO: Compute metrics
+        # - TP/FP/FN, intersection > 50% with highest candidate
+        # - Radius Accuracy for highest candidate
+
+        output = preds.squeeze().detach().cpu().numpy()
+        candidates = fcnnv2_post_processs(output)
+        candidates = torch.from_numpy(candidates) # (N, 3)
 
         arg_pred_x = torch.argmax(preds[0], dim=1)  # (N, 1)
         arg_pred_y = torch.argmax(preds[1], dim=1)  # (N, 1)
 
-        acc = [func(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.val_radacc]
+        self.val_iou.update(preds, masks)
+
+        [func.update(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.val_radacc]
 
         # log val metrics
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("val/acc_3", acc[0], on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc_5", acc[1], on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc_10", acc[2], on_step=False, on_epoch=True, prog_bar=True)
 
         return {"loss": loss, "preds": preds, "target_x": gtcenter_x, "target_y": gtcenter_y}
 
     def validation_epoch_end(self, outputs: List[Any]):
         acc = [func.compute() for func in self.val_radacc]  # get val accuracy from current epoch
         [func(val) for func, val in zip(self.val_acc_best, acc)]
+        iou, iou_90, iou_99 = self.val_iou.compute()
+        self.log("val/acc_3", acc[0], on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/acc_5", acc[1], on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/acc_10", acc[2], on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/acc_rad3_best", self.val_acc_best[0].compute(), on_epoch=True, prog_bar=True)
         self.log("val/acc_rad5_best", self.val_acc_best[1].compute(), on_epoch=True, prog_bar=True)
         self.log("val/acc_rad10_best",
                  self.val_acc_best[2].compute(), on_epoch=True, prog_bar=True)
+        self.log("val/iou", iou, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/iou_90", iou_90, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/iou_99", iou_99, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch: Any, batch_idx: int):
         loss, preds, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
@@ -135,6 +137,7 @@ class FCNNv2LitModel(LightningModule):
         [func.reset() for func in self.train_radacc]
         [func.reset() for func in self.val_radacc]
         [func.reset() for func in self.test_radacc]
+        self.val_iou.reset()
 
     def configure_optimizers(self):
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
