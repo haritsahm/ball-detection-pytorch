@@ -37,6 +37,7 @@ class FCNNv2LitModel(LightningModule):
         self.val_radacc = [RadiusAccuracy(n) for n in [3, 5, 10]]
         self.val_iou = IoUPercentile()
         self.test_radacc = [RadiusAccuracy(n) for n in [3, 5, 10]]
+        self.test_iou = IoUPercentile()
 
         # for logging best so far validation accuracy
         self.val_acc_best = [MaxMetric() for _ in range(3)]
@@ -45,7 +46,7 @@ class FCNNv2LitModel(LightningModule):
         return self.model(x)
 
     def step(self, batch: Any):
-        images, masks, _, gtcenter_x, gtcenter_y, imgInfo = batch
+        images, masks, bboxes, gtcenter_x, gtcenter_y, imgInfo = batch
         logits = self.forward(images)
         arg_gt_x = torch.argmax(gtcenter_x, dim=1)  # (N, 1)
         arg_gt_y = torch.argmax(gtcenter_y, dim=1)  # (N, 1)
@@ -54,16 +55,16 @@ class FCNNv2LitModel(LightningModule):
         
         preds = torch.clamp(logits, min=0, max=1)
 
-        return loss, preds, masks, arg_gt_x, arg_gt_y, imgInfo
+        return loss, preds, masks, bboxes, arg_gt_x, arg_gt_y
 
     def training_step(self, batch: Any, batch_idx: int):
-        loss, preds, masks, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+        loss, preds, masks, bboxes, gtcenter_x, gtcenter_y = self.step(batch)
 
         output = preds.squeeze().detach().cpu().numpy()
         candidates = fcnnv2_post_processs(output)
         candidates = torch.from_numpy(candidates) # (N, 3)
 
-        [func.update(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.train_radacc]
+        [func.update(candidates[:, 0], candidates[:, 1], gtcenter_x, gtcenter_y) for func in self.train_radacc]
 
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
 
@@ -76,7 +77,7 @@ class FCNNv2LitModel(LightningModule):
         self.log("train/acc_10", acc[2], on_step=False, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch: Any, batch_idx: int):
-        loss, preds, masks, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+        loss, preds, masks, bboxes, gtcenter_x, gtcenter_y = self.step(batch)
 
         # TODO: Compute metrics
         # - TP/FP/FN, intersection > 50% with highest candidate
@@ -86,12 +87,11 @@ class FCNNv2LitModel(LightningModule):
         candidates = fcnnv2_post_processs(output)
         candidates = torch.from_numpy(candidates) # (N, 3)
 
-        arg_pred_x = torch.argmax(preds[0], dim=1)  # (N, 1)
-        arg_pred_y = torch.argmax(preds[1], dim=1)  # (N, 1)
-
+        # TP, FP, FN
+        # IoU w/ percentile 90/99
         self.val_iou.update(preds, masks)
 
-        [func.update(arg_pred_x, arg_pred_y, gtcenter_x, gtcenter_y) for func in self.val_radacc]
+        [func.update(candidates[:, 0], candidates[:, 1], gtcenter_x, gtcenter_y) for func in self.val_radacc]
 
         # log val metrics
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False)
@@ -114,7 +114,7 @@ class FCNNv2LitModel(LightningModule):
         self.log("val/iou_99", iou_99, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch: Any, batch_idx: int):
-        loss, preds, gtcenter_x, gtcenter_y, imgInfo = self.step(batch)
+        loss, preds, masks, bboxes, gtcenter_x, gtcenter_y = self.step(batch)
 
         arg_pred_x = torch.argmax(preds[0], dim=1)  # (N, 1)
         arg_pred_y = torch.argmax(preds[1], dim=1)  # (N, 1)

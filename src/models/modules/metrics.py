@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.autograd import Variable
 from torchmetrics import Metric
 from sklearn.metrics import jaccard_score
 
@@ -56,3 +57,58 @@ class IoUPercentile(Metric):
             prct_99_val_ = self.iou[int(np.round(prct_99_idx_))]
 
         return avg_, prct_90_val_, prct_99_val_
+
+class PrecisionRecal(Metrics):
+    def __init__(self, dist_sync_on_step=False):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+
+        self.add_state("tp", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("fp", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("fn", default=torch.tensor(0), dist_reduce_fx="sum")
+
+        self.mul_pred = Variable(torch.FloatTensor([[1,0,1,0],[0,1,0,1],[-1,-1,1,1]]), requires_grad=False)
+        self.mul_targ = Variable(torch.FloatTensor([[1,0,1,0],[0,1,0,1],[-0.5,0,0.5,0],[0,-0.5,0,0.5]]), requires_grad=False)
+
+        if torch.cuda.is_available():
+            self.mul_pred = self.mul_pred.cuda()
+            self.mul_targ = self.mul_pred.cuda()
+
+    # Source: https://github.com/yhenon/pytorch-retinanet/blob/master/retinanet/losses.py#L5
+    def calc_iou(self, a, b):
+        area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+
+        iw = torch.min(torch.unsqueeze(a[:, 2], dim=1), b[:, 2]) - torch.max(torch.unsqueeze(a[:, 0], 1), b[:, 0])
+        ih = torch.min(torch.unsqueeze(a[:, 3], dim=1), b[:, 3]) - torch.max(torch.unsqueeze(a[:, 1], 1), b[:, 1])
+
+        iw = torch.clamp(iw, min=0)
+        ih = torch.clamp(ih, min=0)
+
+        ua = torch.unsqueeze((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), dim=1) + area - iw * ih
+
+        ua = torch.clamp(ua, min=1e-8)
+
+        intersection = iw * ih
+
+        IoU = intersection / ua
+
+        return IoU
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        # pred [N, 3] cx,cy,r
+        # target [M, 4] x,y,w,h
+
+        if len(preds) == 0:
+            self.fn += 1
+        else:
+            xyxy_pred = torch.mm(preds, self.mul_pred)
+            xyxy_targ = torch.mm(target, self.mul_pred)
+
+            if xyxy_pred.shape[0] != xyxy_targ.shape[0]:
+                xyxy_pred = xyxy_pred.repeat(xyxy_targ.shape[0],1)
+
+            iou_val = self.calc_iou(xyxy_pred, xyxy_targ) # (N,)
+
+            if any(iou_val > 0.5):
+                self.tp +=1
+            else:
+                self.fp +=1
