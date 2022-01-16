@@ -147,4 +147,4 @@ logs/*
 wandb/
 .env
 .autoenv
-.aim/
+.aim*

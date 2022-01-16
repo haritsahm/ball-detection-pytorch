@@ -29,4 +29,8 @@ def test_fcnn_datamodule(batch_size, data_dir):
 
     assert len(image) == batch_size
     assert len(mask) == batch_size
-    assert center_x[0].dtype == torch.float32
+    assert isinstance(image, torch.Tensor)
+    assert isinstance(mask, torch.Tensor)
+    assert isinstance(bbox, list)
+    assert isinstance(center_x, list)
+    assert isinstance(center_y, list)

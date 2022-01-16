@@ -51,7 +51,7 @@ class FCNNDataset(Dataset):
 
                 # semantic mask
                 cx, cy = int(x + w / 2), int(y + h / 2)
-                mask = cv2.ellipse(mask, (cx, cy), (int(w / 2), int(h / 2)), 0, 0, 360, 255, -1)
+                mask = cv2.ellipse(mask, (cx, cy), (int(w / 2), int(h / 2)), 0, 0, 360, 1, -1)
 
         # Apply augmentations
         if self._transform:
@@ -104,5 +104,8 @@ class FCNNDataset(Dataset):
             imgInfo.append(b[5])
 
         images = torch.stack(images, dim=0)
+        mask = torch.stack(mask, dim=0)
+        center_x = torch.stack(center_x, dim=0)
+        center_y = torch.stack(center_y, dim=0)
 
         return images, mask, bboxes, center_x, center_y, imgInfo
